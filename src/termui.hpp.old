@@ -1,0 +1,117 @@
+#ifndef TERMUI_HPP
+#define TERMUI_HPP
+
+#include <ncurses.h>
+#include <iostream>
+#include <menu.h>
+#include <vector>
+
+void init_termui();
+void end_termui();
+
+/*  struct winprop:
+ *    contains the ncurses WINDOW pointer alongside relative dimensions
+ */
+struct _winprop
+{
+  WINDOW *win;
+  uint8_t h_percent;
+  uint8_t w_percent;
+};
+
+/*  TermUI:
+ *    provides an interface for drawing to the terminal.
+ */
+class TermUI
+{
+  private:
+    int m_width, m_height;          /* terminal dimensions in rows and cols */
+    std::vector<_winprop> m_wlist;  /* contains ncurses window pointers,
+                                     * position 0 will always be stdscr */
+  
+  public:
+    TermUI()
+    {
+      /* pre-allocate memory for 5 windows and store stdscr */
+      this->m_wlist.reserve(5);
+      this->m_wlist.push_back({stdscr, 0, 0});
+
+      /* init curses and pass on all keyboard input without echoing */
+      initscr(); raw(); keypad(stdscr, TRUE); noecho();
+
+      /* don't flush queued tty output on interrupt,
+       * this prevents a mismatch between what ncurses thinks has
+       * been drawn and what's actually on screen */
+      intrflush(stdscr, FALSE);
+
+      /* store the dimensions for later window drawing */
+      getmaxyx(stdscr, this->m_width, this->m_height);
+
+      refresh();
+    }
+
+    ~TermUI()
+    {
+      endwin();
+    }
+
+
+    /*  create_window:
+     *    creates a new window in ncurses and stores the pointer internally,
+     *    returns the index of the stored pointer. windows are placed top to
+     *    bottom, left to right. dimensions are relative, specifying 255
+     *    possible fractions of the screen, with which the actual size will
+     *    be calculated.
+     *
+     *    uint8_t w_fract:  relative width of the window
+     *    uint8_t h_fract:  relative height of the window
+     */
+    int
+    create_window(const uint8_t h_fract, const uint8_t w_fract)
+    {
+      int index, width, height;
+      WINDOW *w;
+
+      if (w_fract < 1 || h_fract < 1)
+        throw "Window dimensions can not be smaller than 1 unit";
+
+      index = this->m_wlist.size();  /* this will represent the index after
+                                      * storing the new window */
+      height = this->m_height * (h_fract / 255);
+      width = this->m_width * (w_fract / 255);
+      std::cout << height << " " << width << std::endl;
+
+      w = newwin(height, width, 0, 0);
+      //wborder(w, '|', '|', '-', '-', '+', '+', '+', '+');
+      box(w, 0 , 0);
+      wrefresh(w);
+
+      this->m_wlist.push_back({w, h_fract, w_fract});
+
+      return index;
+    }
+
+    /*  destroy_window:
+     *    destroy the window with the specified internal index
+     */
+    void
+    destroy_window(const int index)
+    {
+      WINDOW *w = this->m_wlist[index].win;
+      delwin(w);
+    }
+
+    void
+    destroy_window()
+    {
+      destroy_window(this->m_wlist.size() - 1);
+    }
+
+    void
+    add_text(const char* text)
+    {
+
+    }
+};
+
+#endif /* TERMUI_HPP */
